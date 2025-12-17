@@ -1,11 +1,10 @@
 import streamlit as st
 import cv2
-import torch
 import numpy as np
-from pathlib import Path
 from PIL import Image
 from ultralytics import YOLO
 import tempfile
+import os
 
 # ----------------------------
 # Page config
@@ -14,10 +13,10 @@ st.set_page_config(page_title="WeatherGuard YOLO", layout="wide")
 st.title("WeatherGuard – Adaptive Video Object Detection")
 
 # ----------------------------
-# Device info
+# Device (FORCE CPU FOR CLOUD)
 # ----------------------------
-device = "cuda" if torch.cuda.is_available() else "cpu"
-st.sidebar.write(f"Device: {device.upper()}")
+device = "cpu"
+st.sidebar.write("Device: CPU")
 
 # ----------------------------
 # Load model once
@@ -66,10 +65,10 @@ def adaptation_engine(env):
 # Detection
 # ----------------------------
 def detect(frame, conf, min_area):
-    results = model(frame, conf=conf, verbose=False)
+    results = model(frame, conf=conf, device="cpu", verbose=False)
     out = frame.copy()
 
-    if results and results[0].boxes:
+    if results and results[0].boxes is not None:
         for x1, y1, x2, y2, score, cls in results[0].boxes.data.tolist():
             area = (x2 - x1) * (y2 - y1)
             if area < min_area:
@@ -78,10 +77,15 @@ def detect(frame, conf, min_area):
             x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
             label = model.names[int(cls)]
             cv2.rectangle(out, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(out, f"{label} {score:.2f}",
-                        (x1, y1 - 8),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                        (255, 255, 255), 2)
+            cv2.putText(
+                out,
+                f"{label} {score:.2f}",
+                (x1, y1 - 8),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 255, 255),
+                2,
+            )
     return out
 
 # ----------------------------
@@ -115,9 +119,13 @@ if video_file and start:
     temp_in.close()
 
     cap = cv2.VideoCapture(temp_in.name)
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if fps == 0:
+        fps = 25
+
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
 
     writer = cv2.VideoWriter(
         temp_out.name,
@@ -138,7 +146,10 @@ if video_file and start:
         detected = detect(restored, conf, min_area)
 
         writer.write(detected)
-        frame_box.image(cv2.cvtColor(detected, cv2.COLOR_BGR2RGB), use_container_width=True)
+        frame_box.image(
+            cv2.cvtColor(detected, cv2.COLOR_BGR2RGB),
+            use_container_width=True
+        )
 
     cap.release()
     writer.release()
@@ -152,3 +163,9 @@ if video_file and start:
             file_name="weatherguard_output.mp4",
             mime="video/mp4"
         )
+
+    os.remove(temp_in.name)
+    os.remove(temp_out.name)
+
+else:
+    st.info("Upload a video and click Start Processing.")
