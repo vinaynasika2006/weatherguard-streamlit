@@ -1,10 +1,8 @@
 streamlit
 opencv-python-headless==4.8.1.78
-numpy
+numpy==1.26.4
 Pillow
-
-torch==2.1.2 --index-url https://download.pytorch.org/whl/cpu
-torchvision==0.16.2
-torchaudio==2.1.2
-
 ultralytics
+torch
+torchvision
+torchaudio
